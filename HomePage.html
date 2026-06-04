@@ -143,6 +143,7 @@
       border-radius: 50%;
       object-fit: cover;
       border: 2px solid #f6b23b;
+      background: #ffe1a5;
     }
 
     #userName {
@@ -285,6 +286,7 @@
     }
 
     .card1 { left: 160px; }
+
     .card2 {
       left: 260px;
       background: #fff9ef;
@@ -565,7 +567,7 @@
       <a href="#" class="active" data-i18n="navGames">Games</a>
       <a href="#" data-i18n="navAbout">About</a>
       <a href="#" data-i18n="navResources">Resources</a>
-      <a href="#" id="leaderboardLink" data-i18n="navLeaderboard">Leaderboard</a>
+      <a href="leaderboard.html" data-i18n="navLeaderboard">Leaderboard</a>
       <a href="#" data-i18n="navContact">Contact</a>
     </nav>
 
@@ -575,7 +577,11 @@
       <button class="login-btn" id="loginBtn" data-i18n="login">↪ Login</button>
 
       <div class="user-profile" id="userProfile">
-        <img id="userAvatar" src="" alt="User Avatar">
+        <img
+          id="userAvatar"
+          src="https://ui-avatars.com/api/?name=User&background=ffe1a5&color=09264a"
+          alt="User Avatar"
+        >
         <span id="userName"></span>
         <button id="logoutBtn">Logout</button>
       </div>
@@ -746,7 +752,6 @@
     const startPlayingBtn = document.getElementById("startPlayingBtn");
     const howItWorksBtn = document.getElementById("howItWorksBtn");
     const loginBtn = document.getElementById("loginBtn");
-    const leaderboardLink = document.getElementById("leaderboardLink");
 
     const userProfile = document.getElementById("userProfile");
     const userAvatar = document.getElementById("userAvatar");
@@ -754,6 +759,32 @@
     const logoutBtn = document.getElementById("logoutBtn");
 
     let currentLanguage = localStorage.getItem("zatamLanguage") || "en";
+
+    function getDefaultAvatar(name = "User") {
+      return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=ffe1a5&color=09264a`;
+    }
+
+    function getSafeGooglePhoto(photoURL) {
+      if (!photoURL) return "";
+
+      return photoURL
+        .replace("=s96-c", "=s200-c")
+        .replace("=s64-c", "=s200-c")
+        .replace("=s48-c", "=s200-c");
+    }
+
+    function setAvatar(imgElement, user) {
+      const name = user?.displayName || "User";
+      const googlePhoto = getSafeGooglePhoto(user?.photoURL);
+
+      imgElement.alt = name;
+      imgElement.src = googlePhoto || getDefaultAvatar(name);
+
+      imgElement.onerror = () => {
+        imgElement.onerror = null;
+        imgElement.src = getDefaultAvatar(name);
+      };
+    }
 
     const translations = {
       en: {
@@ -802,7 +833,6 @@
         langButton: "🌐 EN / SA",
 
         comingSoon: "This game is coming soon!",
-        leaderboardSoon: "Leaderboard page will be connected next.",
         howText: "Choose a game category, click Play Now, and learn Sanskrit through simple interactive games.",
         loginFailed: "Login failed. Please try again."
       },
@@ -853,7 +883,6 @@
         langButton: "🌐 SA / EN",
 
         comingSoon: "एषा क्रीडा शीघ्रं आगमिष्यति।",
-        leaderboardSoon: "श्रेष्ठसूची पृष्ठं पश्चात् योज्यते।",
         howText: "वर्गं चिनुत, Play Now नुदत, संस्कृतं क्रीडाभिः शिक्षध्वम्।",
         loginFailed: "प्रवेशः असफलः। पुनः प्रयत्नं कुरु।"
       }
@@ -898,18 +927,18 @@
         loginBtn.style.display = "none";
         userProfile.style.display = "flex";
 
-        userAvatar.src = user.photoURL || "";
+        setAvatar(userAvatar, user);
         userName.textContent = user.displayName || "Player";
 
         localStorage.setItem("zatamUserId", user.uid);
         localStorage.setItem("zatamUserName", user.displayName || "Player");
         localStorage.setItem("zatamUserEmail", user.email || "");
-        localStorage.setItem("zatamUserPhoto", user.photoURL || "");
+        localStorage.setItem("zatamUserPhoto", getSafeGooglePhoto(user.photoURL) || getDefaultAvatar(user.displayName || "Player"));
       } else {
         loginBtn.style.display = "flex";
         userProfile.style.display = "none";
 
-        userAvatar.src = "";
+        userAvatar.src = getDefaultAvatar("User");
         userName.textContent = "";
 
         localStorage.removeItem("zatamUserId");
@@ -955,11 +984,6 @@
 
     howItWorksBtn.addEventListener("click", () => {
       alert(translations[currentLanguage].howText);
-    });
-
-    leaderboardLink.addEventListener("click", (event) => {
-      event.preventDefault();
-      alert(translations[currentLanguage].leaderboardSoon);
     });
 
     document.querySelectorAll(".coming-soon-btn").forEach(button => {

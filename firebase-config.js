@@ -12,7 +12,16 @@ import {
   getFirestore,
   collection,
   addDoc,
-  serverTimestamp
+  serverTimestamp,
+  getDocs,
+  query,
+  orderBy,
+  limit,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  increment
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -40,5 +49,14 @@ export {
   onAuthStateChanged,
   collection,
   addDoc,
-  serverTimestamp
+  serverTimestamp,
+  getDocs,
+  query,
+  orderBy,
+  limit,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  increment
 };
