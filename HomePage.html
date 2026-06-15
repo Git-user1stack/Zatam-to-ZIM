@@ -299,6 +299,41 @@
       transform: rotate(8deg);
     }
 
+    .search-section {
+      background: white;
+      display: flex;
+      justify-content: center;
+      padding: 24px 32px 16px;
+      border-bottom: 1px solid #eee1cc;
+    }
+
+    .search-box {
+      width: 480px;
+      max-width: 100%;
+      position: relative;
+    }
+
+    #gameSearch {
+      width: 100%;
+      height: 52px;
+      padding: 0 20px;
+      border: 2px solid #0b2b4f;
+      border-radius: 14px;
+      background: #fffaf2;
+      color: #09264a;
+      font-size: 17px;
+      font-style: italic;
+      outline: none;
+      box-shadow: 0 3px 10px rgba(0,0,0,.12);
+      transition: all 0.2s ease;
+    }
+
+    #gameSearch:focus {
+      background: white;
+      border-color: #f6b23b;
+      box-shadow: 0 4px 14px rgba(246,178,59,.35);
+    }
+
     .category-bar {
       background: white;
       display: flex;
@@ -613,6 +648,16 @@
     </div>
   </section>
 
+  <section class="search-section">
+    <div class="search-box">
+      <input
+        type="text"
+        id="gameSearch"
+        placeholder="🔍 Search your games..."
+      >
+    </div>
+  </section>
+
   <section class="category-bar">
     <button class="category active" data-filter="all" data-i18n="catAll">▦ ALL</button>
     <button class="category wide" data-filter="word" data-i18n="catWord">शब्दः Word Games</button>
@@ -624,7 +669,7 @@
 
   <main class="games" id="gamesSection">
 
-    <article class="game-card" data-category="puzzle">
+    <article class="game-card" data-category="puzzle" data-title="classic 15 puzzle fifteen sliding numbers">
       <div class="game-image orange">
         <span class="new-tag" data-i18n="newTag">NEW</span>
 
@@ -656,7 +701,7 @@
       </div>
     </article>
 
-    <article class="game-card" data-category="word">
+    <article class="game-card" data-category="word" data-title="rock paper scissors word game">
       <div class="game-image teal">
         <div class="emoji-art">🪨 📄 ✂️</div>
       </div>
@@ -675,7 +720,7 @@
       </div>
     </article>
 
-    <article class="game-card" data-category="board">
+    <article class="game-card" data-category="board" data-title="ladders snakes board game dice">
       <div class="game-image green">
         <div style="font-size:52px;">🪜 🐍 🎲</div>
       </div>
@@ -694,7 +739,7 @@
       </div>
     </article>
 
-    <article class="game-card" data-category="memory">
+    <article class="game-card" data-category="memory" data-title="memory match card letters">
       <div class="game-image purple">
         <div class="emoji-art">क ख ग<br>घ ड च</div>
       </div>
@@ -713,7 +758,7 @@
       </div>
     </article>
 
-    <article class="game-card" data-category="board">
+    <article class="game-card" data-category="board" data-title="tic tac toe board game x o">
       <div class="game-image blue">
         <div style="font-size:58px; color:#2f6dff;">O X O<br>X O X</div>
       </div>
@@ -752,6 +797,7 @@
     const startPlayingBtn = document.getElementById("startPlayingBtn");
     const howItWorksBtn = document.getElementById("howItWorksBtn");
     const loginBtn = document.getElementById("loginBtn");
+    const searchInput = document.getElementById("gameSearch");
 
     const userProfile = document.getElementById("userProfile");
     const userAvatar = document.getElementById("userAvatar");
@@ -759,6 +805,7 @@
     const logoutBtn = document.getElementById("logoutBtn");
 
     let currentLanguage = localStorage.getItem("zatamLanguage") || "en";
+    let currentFilter = "all";
 
     function getDefaultAvatar(name = "User") {
       return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=ffe1a5&color=09264a`;
@@ -801,6 +848,8 @@
         startPlaying: "🎮 Start Playing",
         howItWorks: "📖 How It Works",
 
+        searchPlaceholder: "🔍 Search your favourite games...",
+
         catAll: "▦ ALL",
         catWord: "शब्दः Word Games",
         catBoard: "🎲 Board Games",
@@ -829,7 +878,7 @@
         tttDesc: "Play Tic Tac Toe and have fun while thinking ahead!",
 
         playNow: "Play Now ▶",
-        emptyState: "No games available in this category yet.",
+        emptyState: "No games found.",
         langButton: "🌐 EN / SA",
 
         comingSoon: "This game is coming soon!",
@@ -850,6 +899,8 @@
         heroDesc: "ZimJS द्वारा निर्मिताः संस्कृतक्रीडाः।<br>आनन्ददायकाः शिक्षाप्रदाः च।",
         startPlaying: "🎮 क्रीडां आरभस्व",
         howItWorks: "📖 कथं कार्यं करोति",
+
+        searchPlaceholder: "🔍 क्रीडां अन्वेषय...",
 
         catAll: "▦ सर्वम्",
         catWord: "शब्दक्रीडाः",
@@ -879,7 +930,7 @@
         tttDesc: "चिन्तनपूर्वकं क्रीडां कुरु।",
 
         playNow: "क्रीडतु ▶",
-        emptyState: "अस्मिन् वर्गे अद्य क्रीडा नास्ति।",
+        emptyState: "क्रीडा न प्राप्ता।",
         langButton: "🌐 SA / EN",
 
         comingSoon: "एषा क्रीडा शीघ्रं आगमिष्यति।",
@@ -901,8 +952,31 @@
 
       langBtn.innerHTML = t.langButton;
       logoutBtn.innerHTML = t.logout;
+      searchInput.placeholder = t.searchPlaceholder;
 
       localStorage.setItem("zatamLanguage", currentLanguage);
+    }
+
+    function applyFilters() {
+      const keyword = searchInput.value.toLowerCase().trim();
+      let visibleCount = 0;
+
+      gameCards.forEach(card => {
+        const category = card.dataset.category;
+        const title = card.dataset.title.toLowerCase();
+
+        const matchesCategory = currentFilter === "all" || category === currentFilter;
+        const matchesSearch = title.includes(keyword);
+
+        if (matchesCategory && matchesSearch) {
+          card.classList.remove("hide");
+          visibleCount++;
+        } else {
+          card.classList.add("hide");
+        }
+      });
+
+      emptyState.style.display = visibleCount === 0 ? "block" : "none";
     }
 
     loginBtn.addEventListener("click", async () => {
@@ -950,30 +1024,23 @@
 
     categoryButtons.forEach(button => {
       button.addEventListener("click", () => {
-        const filter = button.dataset.filter;
-        let visibleCount = 0;
+        currentFilter = button.dataset.filter;
 
         categoryButtons.forEach(btn => btn.classList.remove("active"));
         button.classList.add("active");
 
-        gameCards.forEach(card => {
-          const category = card.dataset.category;
-
-          if (filter === "all" || category === filter) {
-            card.classList.remove("hide");
-            visibleCount++;
-          } else {
-            card.classList.add("hide");
-          }
-        });
-
-        emptyState.style.display = visibleCount === 0 ? "block" : "none";
+        applyFilters();
       });
+    });
+
+    searchInput.addEventListener("input", () => {
+      applyFilters();
     });
 
     langBtn.addEventListener("click", () => {
       currentLanguage = currentLanguage === "en" ? "sa" : "en";
       updateLanguage();
+      applyFilters();
     });
 
     startPlayingBtn.addEventListener("click", () => {
@@ -993,6 +1060,7 @@
     });
 
     updateLanguage();
+    applyFilters();
   </script>
 
 </body>
