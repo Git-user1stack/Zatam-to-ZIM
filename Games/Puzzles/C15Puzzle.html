@@ -345,6 +345,11 @@ function ready() {
         );
     }
 
+    function getTodayDateString() {
+        const today = new Date();
+        return today.toISOString().split("T")[0];
+    }
+
     async function uploadPuzzleScore() {
         if (scoreUploaded) return;
 
@@ -368,7 +373,8 @@ function ready() {
 
             score: calculatePuzzleScore(),
 
-            createdAt: serverTimestamp()
+            createdAt: serverTimestamp(),
+            scoreDate: getTodayDateString()
         };
 
         try {

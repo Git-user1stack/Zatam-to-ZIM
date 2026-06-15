@@ -234,6 +234,52 @@
       color: white;
     }
 
+
+
+    .date-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .date-btn {
+      height: 40px;
+      border-radius: 12px;
+      border: 1px solid #e1dfda;
+      background: white;
+      color: #0b2b4f;
+      font-weight: 800;
+      padding: 0 18px;
+      cursor: pointer;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.06);
+    }
+
+    .date-btn.active {
+      background: #f6b23b;
+      color: white;
+      border-color: #f6b23b;
+    }
+
+    .date-picker-label {
+      font-size: 14px;
+      font-weight: 800;
+      color: #0b2b4f;
+    }
+
+    #leaderboardDate {
+      height: 40px;
+      border-radius: 12px;
+      border: 1.5px solid #0b2b4f;
+      padding: 0 14px;
+      font-weight: 700;
+      color: #0b2b4f;
+      background: white;
+      cursor: pointer;
+    }
+
+
     .leaderboard-card,
     .side-card,
     .info-card {
@@ -569,6 +615,13 @@
           <button class="tab" data-game="rps">✂️ RPS</button>
         </div>
 
+        <div class="date-controls">
+          <button class="date-btn active" data-date-mode="all">🏆 All Time</button>
+          <button class="date-btn" data-date-mode="today">📅 Today</button>
+          <label class="date-picker-label" for="leaderboardDate">Choose Date:</label>
+          <input type="date" id="leaderboardDate">
+        </div>
+
         <div class="leaderboard-card">
           <table>
             <thead>
@@ -713,9 +766,13 @@
 
     const tabButtons = document.querySelectorAll(".tab");
     const sideFilterRows = document.querySelectorAll(".filter-row");
+    const dateButtons = document.querySelectorAll(".date-btn");
+    const leaderboardDate = document.getElementById("leaderboardDate");
 
     let currentUser = null;
     let currentGameFilter = "all";
+    let currentDateMode = "all";
+    let selectedDate = getTodayDateString();
     let allScores = [];
     let visibleCount = 7;
 
@@ -742,6 +799,9 @@
             player: "Player",
             game: "Game",
             points: "Points",
+            allTime: "🏆 All Time",
+            today: "📅 Today",
+            chooseDate: "Choose Date:",
 
             myRank: "My Rank",
 
@@ -780,6 +840,9 @@
             player: "क्रीडकः",
             game: "क्रीडा",
             points: "अङ्काः",
+            allTime: "🏆 सर्वकालिकम्",
+            today: "📅 अद्य",
+            chooseDate: "दिनाङ्कं चिनुत:",
 
             myRank: "मम स्थानम्",
 
@@ -800,6 +863,37 @@
             langButton: "🌐 SA / EN"
         }
     };
+
+    function getTodayDateString() {
+      const today = new Date();
+      return today.toISOString().split("T")[0];
+    }
+
+    function getLocalDateStringFromTimestamp(value) {
+      if (!value) return "";
+
+      let dateObj = null;
+
+      if (typeof value.toDate === "function") {
+        dateObj = value.toDate();
+      } else if (value instanceof Date) {
+        dateObj = value;
+      } else {
+        dateObj = new Date(value);
+      }
+
+      if (!dateObj || Number.isNaN(dateObj.getTime())) return "";
+
+      const year = dateObj.getFullYear();
+      const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+      const day = String(dateObj.getDate()).padStart(2, "0");
+
+      return `${year}-${month}-${day}`;
+    }
+
+    function getScoreDate(item) {
+      return item.scoreDate || getLocalDateStringFromTimestamp(item.createdAt);
+    }
 
     function getDefaultAvatar(name = "User") {
       return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=ffe1a5&color=09264a`;
@@ -902,7 +996,7 @@
         const q = query(
           collection(db, "leaderboard"),
           orderBy("score", "desc"),
-          limit(100)
+          limit(500)
         );
 
         const snapshot = await getDocs(q);
@@ -995,11 +1089,15 @@
     }
 
     function getFilteredScores() {
-      if (currentGameFilter === "all") {
-        return allScores;
-      }
+      return allScores.filter((item) => {
+        const matchesGame =
+          currentGameFilter === "all" || item.gameId === currentGameFilter;
 
-      return allScores.filter((item) => item.gameId === currentGameFilter);
+        const matchesDate =
+          currentDateMode === "all" || getScoreDate(item) === selectedDate;
+
+        return matchesGame && matchesDate;
+      });
     }
 
     function updateMyRank(filteredScores) {
@@ -1045,7 +1143,39 @@
       currentGameFilter = gameId;
       visibleCount = 7;
 
-      tabButtons.forEach((button) => {
+  
+    function setDateFilter(mode, dateValue = getTodayDateString()) {
+      currentDateMode = mode;
+      selectedDate = dateValue;
+      visibleCount = 7;
+
+      leaderboardDate.value = selectedDate;
+
+      dateButtons.forEach((button) => {
+        button.classList.toggle("active", button.dataset.dateMode === mode);
+      });
+
+      renderLeaderboard();
+    }
+
+    dateButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const mode = button.dataset.dateMode;
+
+        if (mode === "all") {
+          setDateFilter("all", leaderboardDate.value || getTodayDateString());
+        } else {
+          setDateFilter("today", getTodayDateString());
+        }
+      });
+    });
+
+    leaderboardDate.addEventListener("change", () => {
+      if (!leaderboardDate.value) return;
+      setDateFilter("custom", leaderboardDate.value);
+    });
+
+    tabButtons.forEach((button) => {
         button.classList.toggle("active", button.dataset.game === gameId);
       });
 
@@ -1055,6 +1185,38 @@
 
       renderLeaderboard();
     }
+
+
+    function setDateFilter(mode, dateValue = getTodayDateString()) {
+      currentDateMode = mode;
+      selectedDate = dateValue;
+      visibleCount = 7;
+
+      leaderboardDate.value = selectedDate;
+
+      dateButtons.forEach((button) => {
+        button.classList.toggle("active", button.dataset.dateMode === mode);
+      });
+
+      renderLeaderboard();
+    }
+
+    dateButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const mode = button.dataset.dateMode;
+
+        if (mode === "all") {
+          setDateFilter("all", leaderboardDate.value || getTodayDateString());
+        } else {
+          setDateFilter("today", getTodayDateString());
+        }
+      });
+    });
+
+    leaderboardDate.addEventListener("change", () => {
+      if (!leaderboardDate.value) return;
+      setDateFilter("custom", leaderboardDate.value);
+    });
 
     tabButtons.forEach((button) => {
       button.addEventListener("click", () => {
@@ -1139,6 +1301,15 @@
     document.querySelectorAll(".point-row span")[3].textContent =
         t.winStreak;
 
+    document.querySelector('[data-date-mode="all"]').textContent =
+        t.allTime;
+
+    document.querySelector('[data-date-mode="today"]').textContent =
+        t.today;
+
+    document.querySelector(".date-picker-label").textContent =
+        t.chooseDate;
+
     langBtn.textContent = t.langButton;
 
     if (!currentUser) {
@@ -1160,6 +1331,7 @@
     updateLanguage();
     });
 
+    leaderboardDate.value = selectedDate;
     updateLanguage();
 
   </script>
