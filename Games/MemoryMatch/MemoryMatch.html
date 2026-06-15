@@ -8,6 +8,66 @@
 <title>Memory क्रीडा - ZIM Picture Word Match</title>
 <meta name="viewport" content="width=device-width, user-scalable=no" />
 
+<style>
+
+    .auth-bar {
+        position: fixed;
+        top: 22px;
+        right: 28px;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-family: Arial, Helvetica, sans-serif;
+    }
+
+    #memoryLoginBtn,
+    #memoryLogoutBtn {
+        background: #0b2b2b;
+        color: white;
+        border: none;
+        border-radius: 14px;
+        padding: 10px 16px;
+        font-weight: 700;
+        cursor: pointer;
+        box-shadow: 0 4px 10px rgba(0,0,0,.2);
+    }
+
+    #memoryLogoutBtn {
+        background: #f2b300;
+        padding: 8px 12px;
+    }
+
+    #memoryUserProfile {
+        display: none;
+        align-items: center;
+        gap: 8px;
+        background: white;
+        border: 2px solid #0b2b2b;
+        border-radius: 18px;
+        padding: 5px 8px;
+    }
+
+    #memoryUserAvatar {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 2px solid #f2b300;
+    }
+
+    #memoryUserName {
+        max-width: 120px;
+        font-size: 14px;
+        font-weight: 700;
+        color: #0b2b2b;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+</style>
+
 <script>
 var wlist=[['मेषः','वृषभः','मिथुनम्','कर्कटः','सिंहः','कन्या ','तुला ','वृश्चिकः ','धनुः ','मकरः ','कुम्भः','मीनः '],
 ["देवः","मानवः","दानवः","किन्नरः","पुरुषः","महिला","शिशुः","बालकः","बालिका","किशोरः","तरुणः","तरुणी"],
@@ -176,6 +236,18 @@ import "https://zimjs.org/cdn/019/zim";
 import "https://zimjs.org/cdn/019/zim_game";
 import "https://zimjs.org/cdn/019/zim_pizzazz";
 
+import {
+    auth,
+    db,
+    provider,
+    signInWithPopup,
+    signOut,
+    onAuthStateChanged,
+    collection,
+    addDoc,
+    serverTimestamp
+} from "../../firebase-config.js";
+
 const params = new URLSearchParams(location.search);
 let setIndex = parseInt(params.get("s"));
 if (isNaN(setIndex) || setIndex < 0 || setIndex >= wlist.length) {
@@ -201,6 +273,66 @@ function ready() {
     let tempLine = null;
     let matchedLines = [];
     let isPlaying = false;
+    let scoreUploaded = false;
+
+    const memoryLoginBtn = document.getElementById("memoryLoginBtn");
+    const memoryUserProfile = document.getElementById("memoryUserProfile");
+    const memoryUserAvatar = document.getElementById("memoryUserAvatar");
+    const memoryUserName = document.getElementById("memoryUserName");
+    const memoryLogoutBtn = document.getElementById("memoryLogoutBtn");
+
+    function getDefaultAvatar(name = "User") {
+        return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=ffe1a5&color=09264a`;
+    }
+
+    function getSafeGooglePhoto(photoURL) {
+        if (!photoURL) return "";
+        return photoURL
+            .replace("=s96-c", "=s200-c")
+            .replace("=s64-c", "=s200-c")
+            .replace("=s48-c", "=s200-c");
+    }
+
+    memoryLoginBtn.addEventListener("click", async () => {
+        try {
+            await signInWithPopup(auth, provider);
+        } catch (error) {
+            console.error("Memory Match login error:", error);
+            alert("Login failed. Please try again.");
+        }
+    });
+
+    memoryLogoutBtn.addEventListener("click", async () => {
+        await signOut(auth);
+    });
+
+    onAuthStateChanged(auth, (user) => {
+        if (user) {
+            const safePhoto = getSafeGooglePhoto(user.photoURL) || getDefaultAvatar(user.displayName || "Player");
+
+            memoryLoginBtn.style.display = "none";
+            memoryUserProfile.style.display = "flex";
+
+            memoryUserAvatar.src = safePhoto;
+            memoryUserName.textContent = user.displayName || "Player";
+
+            localStorage.setItem("zatamUserId", user.uid);
+            localStorage.setItem("zatamUserName", user.displayName || "Player");
+            localStorage.setItem("zatamUserEmail", user.email || "");
+            localStorage.setItem("zatamUserPhoto", safePhoto);
+        } else {
+            memoryLoginBtn.style.display = "block";
+            memoryUserProfile.style.display = "none";
+
+            memoryUserAvatar.src = "";
+            memoryUserName.textContent = "";
+
+            localStorage.removeItem("zatamUserId");
+            localStorage.removeItem("zatamUserName");
+            localStorage.removeItem("zatamUserEmail");
+            localStorage.removeItem("zatamUserPhoto");
+        }
+    });
 
     const bar = new Rectangle(W,40,black).addTo();
     const arrow = makeIcon({type:"arrowstick", color:white, scale:1.2});
@@ -323,6 +455,7 @@ function ready() {
         wrongMoves = 0;
         matchesDone = 0;
         isPlaying = true;
+        scoreUploaded = false;
 
         message.color = black;
         message.text = "Drag from a word to its matching picture.";
@@ -534,13 +667,68 @@ function ready() {
         S.update();
     }
 
+        function getTodayDateString() {
+        const today = new Date();
+        return today.toISOString().split("T")[0];
+    }
+
+    function calculateScore() {
+        const timePenalty = Math.round(timer.time * 15);
+        const mistakePenalty = wrongMoves * 100;
+        const difficultyBonus = PAIRS * 250;
+        return Math.max(100, 10000 + difficultyBonus - timePenalty - mistakePenalty);
+    }
+
+    async function uploadScore(finalScore) {
+        if (scoreUploaded) return;
+
+        const user = auth.currentUser;
+
+        if (!user) {
+            alert("Please login before saving your score.");
+            return;
+        }
+
+        scoreUploaded = true;
+
+        const scoreData = {
+            userId: user.uid,
+            playerName: user.displayName || "Player",
+            email: user.email || "",
+            photoURL: user.photoURL || "",
+
+            gameId: "memory",
+            gameName: "Memory Match",
+
+            score: finalScore,
+            //wrongMoves: wrongMoves,
+            //matches: matchesDone,
+            //totalPairs: PAIRS,
+            //time: timer.text,
+            //difficulty: PAIRS === 4 ? "Easy" : PAIRS === 6 ? "Medium" : "Hard",
+
+            createdAt: serverTimestamp(),
+            scoreDate: getTodayDateString()
+        };
+
+        try {
+            await addDoc(collection(db, "leaderboard"), scoreData);
+            console.log("Memory Match score uploaded successfully:", scoreData);
+        } catch (error) {
+            scoreUploaded = false;
+            console.error("Memory Match score upload failed:", error);
+            alert("Score upload failed. Please try again.");
+        }
+    }
+
     function finishGame() {
         isPlaying = false;
         timer.pause(true);
-        const finalScore = Math.round(timer.time) + wrongMoves * 10;
+        const finalScore = calculateScore();
 
         message.color = green;
         message.text = `उत्तमम्! Complete — Score: ${toDevanagari(finalScore)}`;
+        uploadScore(finalScore);
 
         const pane = new Pane({
             width:600,
@@ -619,5 +807,15 @@ function ready() {
 }
 </script>
 </head>
-<body></body>
+<body>
+    <div class="auth-bar">
+    <button id="memoryLoginBtn">↪ Login</button>
+
+    <div id="memoryUserProfile">
+        <img id="memoryUserAvatar" src="" alt="User Avatar">
+        <span id="memoryUserName"></span>
+        <button id="memoryLogoutBtn">Logout</button>
+    </div>
+</div>
+</body>
 </html>
