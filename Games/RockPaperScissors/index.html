@@ -71,10 +71,6 @@
         query,
         orderBy,
         limit,
-        doc,
-        setDoc,
-        updateDoc,
-        increment,
         serverTimestamp
       } from "../../firebase-config.js";
 
@@ -82,6 +78,7 @@
       const PROFILE_LB_ID = "rps-profile-leaderboard";
       let currentUser = null;
       let profileWired = false;
+      let scoreUploaded = false;
 
       function escapeHTML(value) {
         return String(value ?? "")
@@ -131,88 +128,15 @@
       // Your Firestore rules currently reject it ("Missing or insufficient permissions").
 
       function getTodayDateString() {
-        // Local date string in YYYY-MM-DD (matches Leaderboard.html filters)
-        const d = new Date();
-        const yyyy = d.getFullYear();
-        const mm = String(d.getMonth() + 1).padStart(2, "0");
-        const dd = String(d.getDate()).padStart(2, "0");
-        return `${yyyy}-${mm}-${dd}`;
-      }
-
-      async function uploadScore(finalScore) {
-        if (!Number.isFinite(finalScore)) return;
-        // Don't spam leaderboard with zeros.
-        if (finalScore <= 0) return;
-
-        const user = auth.currentUser;
-        if (!user) {
-          const status = document.getElementById("rps-save-status");
-          if (status) status.textContent = "Please login before saving your score.";
-          return;
-        }
-
-        try {
-          // NOTE: field shape matches the working games (Classic 15, Memory Match)
-          // EXACTLY. Strict Firestore rules can reject docs with extra/unknown keys.
-          const scoreData = {
-            userId: user.uid,
-            playerName: user.displayName || "Player",
-            email: user.email || "",
-            photoURL: user.photoURL || "",
-
-            gameId: "rps",
-            gameName: "Rock Paper Scissors",
-
-            score: finalScore,
-
-            createdAt: serverTimestamp(),
-            scoreDate: getTodayDateString()
-          };
-
-          await addDoc(collection(db, "leaderboard"), scoreData);
-          console.log("RPS score uploaded:", scoreData);
-          const status = document.getElementById("rps-save-status");
-          if (status) {
-            status.textContent = `Saved: ${Number(finalScore).toLocaleString()} ⭐`;
-          }
-        } catch (e) {
-          console.error("Failed to save RPS score:", e);
-          const status = document.getElementById("rps-save-status");
-          if (status) {
-            status.textContent = `Save failed: ${e?.code || e?.message || "unknown error"}`;
-          }
-        }
-      }
-
-      function findPlayerScoreNode() {
-        // In this UI, `.score-display` contains both player and CPU values.
-        // The player's number is the first `.score-num` inside `.score-display`.
-        const display = document.querySelector(".score-display");
-        if (display) {
-          const nums = display.querySelectorAll(".score-num");
-          if (nums && nums.length) return nums[0];
-        }
-
-        const nums = document.querySelectorAll(".score-num");
-        return nums && nums.length ? nums[0] : null;
-      }
-
-      function getPlayerScoreValue() {
-        const display = document.querySelector(".score-display");
-        if (!display) return 0;
-        const nums = [...display.querySelectorAll(".score-num")]
-          .map((n) => parseScoreFromNode(n))
-          .filter((v) => Number.isFinite(v));
-        if (!nums.length) return 0;
-        return nums[0] || 0;
+        const today = new Date();
+        return today.toISOString().split("T")[0];
       }
 
       function parseScoreFromNode(node) {
-        if (!node) return null;
+        if (!node) return 0;
         let text = String(node.textContent || "").trim();
 
         // RPS UI displays digits in Devanagari (०१२३४५६७८९).
-        // Convert them back to ASCII digits before parsing.
         const devDigits = "०१२३४५६७८९";
         const asciiDigits = "0123456789";
         for (let i = 0; i < devDigits.length; i++) {
@@ -225,96 +149,98 @@
         return Number.isFinite(n) ? n : 0;
       }
 
-      function watchAndPersistScore() {
-        let lastSeen = 0;
-        let lastSaved = 0;
-        let scoreNode = null;
-        let scoreObs = null;
-
-        const attach = () => {
-          const node = findPlayerScoreNode();
-          if (!node) return false;
-          if (node === scoreNode && document.contains(node)) return true;
-
-          // Initialize baselines.
-          scoreNode = node;
-          lastSeen = parseScoreFromNode(scoreNode) ?? 0;
-          lastSaved = Math.max(lastSaved, lastSeen);
-
-          scoreObs?.disconnect?.();
-          scoreObs = new MutationObserver(() => {
-            const next = parseScoreFromNode(scoreNode);
-            if (next == null) return;
-
-            // Only react on increase.
-            if (next > lastSeen) {
-              lastSeen = next;
-              if (currentUser && next > lastSaved) {
-                lastSaved = next;
-                uploadScore(next);
-              }
-            } else {
-              lastSeen = next;
-            }
-          });
-
-          scoreObs.observe(scoreNode, { characterData: true, childList: true, subtree: true });
-          return true;
-        };
-
-        // React app mounts async; retry until score node exists.
-        (function waitForScore() {
-          attach();
-          requestAnimationFrame(waitForScore);
-        })();
-
-        // Extra safety: poll the score occasionally (React may replace nodes without mutation).
-        setInterval(() => {
-          const node = findPlayerScoreNode();
-          const next = parseScoreFromNode(node);
-          if (next == null) return;
-          if (next > lastSeen) lastSeen = next;
-          if (currentUser && next > lastSaved) {
-            lastSaved = next;
-            uploadScore(next);
-          }
-        }, 1500);
+      function getPlayerWins() {
+        const display = document.querySelector(".score-display");
+        if (!display) return 0;
+        const nums = display.querySelectorAll(".score-num");
+        if (!nums.length) return 0;
+        return parseScoreFromNode(nums[0]);
       }
 
-      function watchRoundEndAndUpload() {
-        // Trigger when the result message changes to win/lose/tie.
-        let lastKey = "";
+      function calculateRpsScore(wins) {
+        // Same pattern as Memory Match: meaningful points, not raw win count.
+        return Math.max(100, wins * 1000);
+      }
 
-        const attach = () => {
-          const msg = document.querySelector(".result-msg");
-          if (!msg) return false;
+      async function uploadScore(finalScore) {
+        if (scoreUploaded) return;
 
-          const obs = new MutationObserver(() => {
-            const text = (msg.textContent || "").trim();
-            const cls = msg.className || "";
-            const key = `${cls}::${text}`;
+        const user = auth.currentUser;
+        if (!user) {
+          alert("Please login before saving your score.");
+          return;
+        }
 
-            if (key === lastKey) return;
-            lastKey = key;
+        if (!Number.isFinite(finalScore) || finalScore <= 0) return;
 
-            const isFinal =
-              cls.includes("win") || cls.includes("lose") || cls.includes("tie") ||
-              /win|lost|draw/i.test(text);
+        scoreUploaded = true;
 
-            if (!isFinal) return;
+        const scoreData = {
+          userId: user.uid,
+          playerName: user.displayName || "Player",
+          email: user.email || "",
+          photoURL: user.photoURL || "",
 
-            const finalScore = getPlayerScoreValue();
-            uploadScore(finalScore);
-          });
+          gameId: "rps",
+          gameName: "Rock Paper Scissors",
 
-          obs.observe(msg, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ["class"] });
-          return true;
+          score: finalScore,
+
+          createdAt: serverTimestamp(),
+          scoreDate: getTodayDateString()
         };
 
-        (function waitForMsg() {
-          attach();
-          requestAnimationFrame(waitForMsg);
-        })();
+        try {
+          await addDoc(collection(db, "leaderboard"), scoreData);
+          console.log("RPS score uploaded successfully:", scoreData);
+          const status = document.getElementById("rps-save-status");
+          if (status) {
+            status.textContent = `Saved: ${Number(finalScore).toLocaleString()} ⭐`;
+          }
+        } catch (error) {
+          scoreUploaded = false;
+          console.error("RPS score upload failed:", error);
+          const status = document.getElementById("rps-save-status");
+          if (status) {
+            status.textContent = `Save failed: ${error?.code || error?.message || "unknown error"}`;
+          }
+          alert("Score upload failed. Please try again.");
+        }
+      }
+
+      function finishSession() {
+        const wins = getPlayerWins();
+        if (wins <= 0) return;
+        uploadScore(calculateRpsScore(wins));
+      }
+
+      function setupSessionScoreUpload() {
+        // Upload once when the player ends a session (Reset), like Memory Match finishGame().
+        document.addEventListener(
+          "click",
+          (event) => {
+            if (event.target.closest(".reset-btn")) {
+              finishSession();
+            }
+          },
+          true
+        );
+
+        // Upload when leaving the game via the back link.
+        const backLink = document.querySelector('a[aria-label="Back to Home"]');
+        backLink?.addEventListener("click", () => {
+          finishSession();
+        });
+
+        // Allow a new upload after scores are reset to 0.
+        let lastWins = 0;
+        setInterval(() => {
+          const wins = getPlayerWins();
+          if (lastWins > 0 && wins === 0) {
+            scoreUploaded = false;
+          }
+          lastWins = wins;
+        }, 500);
       }
 
       async function loadRpsLeaderboard(intoEl) {
@@ -498,10 +424,8 @@
         if (!wireProfileButton()) requestAnimationFrame(waitForProfileBtn);
       })();
 
-      // Persist score changes into the main leaderboard collection.
-      watchAndPersistScore();
-      // Also upload when each round completes (win/lose/draw).
-      watchRoundEndAndUpload();
+      // Upload score once per session when the player resets or leaves (like Memory Match).
+      setupSessionScoreUpload();
 
       onAuthStateChanged(auth, async (user) => {
         currentUser = user || null;
