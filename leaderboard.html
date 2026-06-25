@@ -613,6 +613,7 @@
           <button class="tab" data-game="classic15">🧩 Classic 15</button>
           <button class="tab" data-game="ticTacToe">❌ Tic Tac Toe</button>
           <button class="tab" data-game="rps">✂️ RPS</button>
+          <button class="tab" data-game="2048">🔢 2048</button>
         </div>
 
         <div class="date-controls">
@@ -686,6 +687,7 @@
           <div class="filter-row" data-side-game="ticTacToe"><span>Tic Tac Toe</span><span>All</span></div>
           <div class="filter-row" data-side-game="memory"><span>Memory Match</span><span>All</span></div>
           <div class="filter-row" data-side-game="laddersSnakes"><span>Ladders & Snakes</span><span>All</span></div>
+          <div class="filter-row" data-side-game="2048"><span>2048</span><span>All</span></div>
         </div>
 
         <div class="side-card">
@@ -795,6 +797,8 @@
             classic15: "🧩 Classic 15",
             ticTacToe: "❌ Tic Tac Toe",
             rps: "✂️ RPS",
+            game2048: "🔢 2048",
+
             rank: "Rank",
             player: "Player",
             game: "Game",
@@ -835,6 +839,7 @@
             classic15: "🧩 १५ प्रहेलिका",
             ticTacToe: "❌ त्रिरेखा",
             rps: "✂️ शिला पत्रम्",
+            game2048: "🔢 २०४८",
 
             rank: "स्थानम्",
             player: "क्रीडकः",
@@ -1136,99 +1141,67 @@
       if (gameName.includes("Classic")) return "Puzzle";
       if (gameName.includes("Tic")) return "Tic";
       if (gameName.includes("Rock")) return "RPS";
+      if (gameName.includes("2048")) return "2048";
       return gameName;
     }
 
-    function setGameFilter(gameId) {
-      currentGameFilter = gameId;
-      visibleCount = 7;
+function setGameFilter(gameId) {
+  currentGameFilter = gameId;
+  visibleCount = 7;
 
-  
-    function setDateFilter(mode, dateValue = getTodayDateString()) {
-      currentDateMode = mode;
-      selectedDate = dateValue;
-      visibleCount = 7;
+  tabButtons.forEach((button) => {
+    button.classList.toggle("active", button.dataset.game === gameId);
+  });
 
-      leaderboardDate.value = selectedDate;
+  sideFilterRows.forEach((row) => {
+    row.classList.toggle("active", row.dataset.sideGame === gameId);
+  });
 
-      dateButtons.forEach((button) => {
-        button.classList.toggle("active", button.dataset.dateMode === mode);
-      });
+  renderLeaderboard();
+}
 
-      renderLeaderboard();
+function setDateFilter(mode, dateValue = getTodayDateString()) {
+  currentDateMode = mode;
+  selectedDate = dateValue;
+  visibleCount = 7;
+
+  leaderboardDate.value = selectedDate;
+
+  dateButtons.forEach((button) => {
+    button.classList.toggle("active", button.dataset.dateMode === mode);
+  });
+
+  renderLeaderboard();
+}
+
+dateButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    const mode = button.dataset.dateMode;
+
+    if (mode === "all") {
+      setDateFilter("all", leaderboardDate.value || getTodayDateString());
+    } else {
+      setDateFilter("today", getTodayDateString());
     }
+  });
+});
 
-    dateButtons.forEach((button) => {
-      button.addEventListener("click", () => {
-        const mode = button.dataset.dateMode;
+leaderboardDate.addEventListener("change", () => {
+  if (!leaderboardDate.value) return;
+  setDateFilter("custom", leaderboardDate.value);
+});
 
-        if (mode === "all") {
-          setDateFilter("all", leaderboardDate.value || getTodayDateString());
-        } else {
-          setDateFilter("today", getTodayDateString());
-        }
-      });
-    });
+tabButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    setGameFilter(button.dataset.game);
+  });
+});
 
-    leaderboardDate.addEventListener("change", () => {
-      if (!leaderboardDate.value) return;
-      setDateFilter("custom", leaderboardDate.value);
-    });
-
-    tabButtons.forEach((button) => {
-        button.classList.toggle("active", button.dataset.game === gameId);
-      });
-
-      sideFilterRows.forEach((row) => {
-        row.classList.toggle("active", row.dataset.sideGame === gameId);
-      });
-
-      renderLeaderboard();
-    }
-
-
-    function setDateFilter(mode, dateValue = getTodayDateString()) {
-      currentDateMode = mode;
-      selectedDate = dateValue;
-      visibleCount = 7;
-
-      leaderboardDate.value = selectedDate;
-
-      dateButtons.forEach((button) => {
-        button.classList.toggle("active", button.dataset.dateMode === mode);
-      });
-
-      renderLeaderboard();
-    }
-
-    dateButtons.forEach((button) => {
-      button.addEventListener("click", () => {
-        const mode = button.dataset.dateMode;
-
-        if (mode === "all") {
-          setDateFilter("all", leaderboardDate.value || getTodayDateString());
-        } else {
-          setDateFilter("today", getTodayDateString());
-        }
-      });
-    });
-
-    leaderboardDate.addEventListener("change", () => {
-      if (!leaderboardDate.value) return;
-      setDateFilter("custom", leaderboardDate.value);
-    });
-
-    tabButtons.forEach((button) => {
-      button.addEventListener("click", () => {
-        setGameFilter(button.dataset.game);
-      });
-    });
-
-    sideFilterRows.forEach((row) => {
-      row.addEventListener("click", () => {
-        setGameFilter(row.dataset.sideGame);
-      });
-    });
+sideFilterRows.forEach((row) => {
+  row.addEventListener("click", () => {
+    setGameFilter(row.dataset.sideGame);
+  });
+});
 
     viewMoreBtn.addEventListener("click", () => {
       visibleCount += 5;
@@ -1272,6 +1245,9 @@
 
     document.querySelector('[data-game="rps"]').textContent =
         t.rps;
+
+    document.querySelector('[data-game="2048"]').textContent =
+        t.game2048;
 
     const headers = document.querySelectorAll("th");
 

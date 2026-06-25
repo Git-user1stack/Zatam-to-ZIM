@@ -94,10 +94,14 @@
 <script type="module">
   import {
     auth,
+    db,
     provider,
     signInWithPopup,
     signOut,
-    onAuthStateChanged
+    onAuthStateChanged,
+    collection,
+    addDoc,
+    serverTimestamp
   } from "../../firebase-config.js";
 
   const loginBtn = document.getElementById("loginBtn");
@@ -106,24 +110,53 @@
   const userName = document.getElementById("userName");
   const userAvatar = document.getElementById("userAvatar");
 
-  homeButton.addEventListener("click", () => {
-    window.location.href = "../../index.html";
-  });
+  window.currentUser = null;
 
-  loginBtn.addEventListener("click", async () => {
-    try {
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      console.error("Google login error:", error);
-      alert("Google login failed.");
+    window.save2048Score = async function(finalScore) {
+    const user = window.currentUser;
+
+    if (!user) {
+        console.log("User not logged in. Score not saved.");
+        return;
     }
-  });
+
+    const today = new Date().toISOString().split("T")[0];
+
+    await addDoc(collection(db, "leaderboard"), {
+        createdAt: serverTimestamp(),
+        email: user.email || "",
+        gameId: "2048",
+        gameName: "2048",
+        photoURL: user.photoURL || "",
+        playerName: user.displayName || "Player",
+        score: finalScore,
+        scoreDate: today,
+        userId: user.uid
+    });
+
+    console.log("2048 score saved.");
+    };
+
+
+    homeButton.addEventListener("click", () => {
+        window.location.href = "../../index.html";
+    });
+
+    loginBtn.addEventListener("click", async () => {
+        try {
+        await signInWithPopup(auth, provider);
+        } catch (error) {
+        console.error("Google login error:", error);
+        alert("Google login failed.");
+        }
+    });
 
   logoutBtn.addEventListener("click", async () => {
     await signOut(auth);
   });
 
   onAuthStateChanged(auth, user => {
+    window.currentUser = user;
     if (user) {
       userName.textContent = user.displayName || user.email || "Player";
       userAvatar.src = user.photoURL || "https://ui-avatars.com/api/?name=Player&background=00a6b4&color=fff";
@@ -150,6 +183,7 @@ frame.on("ready", function() {
   let gameOver = false;
   let isSanskrit = false;
   let isMoving = false;
+  let scoreSaved = false;
 
   const tileSize = 110;
   const gap = 12;
@@ -476,6 +510,14 @@ frame.on("ready", function() {
       if (checkGameOver()) {
         gameOver = true;
         messageLabel.text = getText("gameOver");
+
+        if (!scoreSaved) {
+        scoreSaved = true;
+
+          if (typeof window.save2048Score === "function") {
+            window.save2048Score(score);
+          }
+        }
       }
 
       isMoving = false;
@@ -520,6 +562,7 @@ frame.on("ready", function() {
 
     score = 0;
     gameOver = false;
+    scoreSaved = false;
     isMoving = false;
     messageLabel.text = "";
 
